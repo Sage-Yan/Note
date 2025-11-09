@@ -223,7 +223,7 @@ export default App;
 
 ---
 
-## 5. React组件基础使用
+## 5. React 组件基础使用
 
 1. **概念：**一个组件就是用户界面的一部分，它可以由自己的逻辑和外观，组件之间**可以相互嵌套，也可以复用多次。**
 
@@ -252,6 +252,8 @@ function App() {
 
 export default App;
 ```
+
+---
 
 ## 6. useState 基础使用
 
@@ -338,3 +340,87 @@ function App() {
 export default App;
 ```
 
+---
+
+## 7. 基础样式控制
+
+1. 样式控制方式
+
+   - 行内样式（不推荐）
+
+   - class 类名控制 `className`
+
+2. 代码示例
+
+```jsx
+// 导入样式
+import './index.css'
+
+const style = {
+    color: 'red',
+    fontSize: '50px',
+}
+
+function App() {
+    return (
+        <div className="App">
+           {/*行内样式控制两种方式*/}
+            <span style={{color:'red', fontSize:'50px'}}>This is span</span>
+            <br/>
+            <span style={style}>This is span</span>
+            {/*通过class类名控制*/}
+            <span className="foo">This is class foo</span>
+        </div>
+    );
+}
+
+export default App;
+```
+
+```css
+<!-- index.css -->
+.foo {
+    color: blue;
+    font-size: large;
+}
+```
+
+## 8. 评论案例
+
+1.  目标
+   - 渲染评论列表
+   - 删除评论实现
+   - 渲染导航Tab和高亮显示
+   - 评论列表排序功能实现
+2. 代码
+
+​	`react-basic-pro`文件夹
+
+---
+
+## 9. classnames 优化类名控制
+
+1. **作用：**是一个简单的JS库，可以非常方便的**通过条件动态控制clss类名的显示**。
+2. **安装:**
+
+```cmd
+ npm install classnames
+```
+
+3. **优势：**
+
+- 基础
+
+```jsx
+className={`nav-item ${type === item.type && 'active'}`}
+```
+
+- 改进
+
+```jsx
+className={classNames('nav-item', {active: type === item.type})}
+```
+
+---
+
+## 10. 表单受控绑定
