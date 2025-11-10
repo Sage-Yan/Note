@@ -876,5 +876,9 @@ export default App;
 
 2. 只能在组件的顶层调用，不能嵌套在if、for、其他函数中。
 
+---
 
+## 15. Redux
+
+> Redux是React中最常用的**集中状态管理工具**，类似于Vue中的Pinia，**可以独立于框架运行**。
 

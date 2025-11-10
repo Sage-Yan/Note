@@ -37,12 +37,10 @@ const tabs = [
     {type: 'time', text: '最新'},
 ]
 
-const App = () => {
 
-    // 渲染我们的评论列表
-    // 1. 使用useState维护list
-    // const [commentList, setCommentList] = useState(_.orderBy(list, 'like', 'desc'))
-    // 获取接口数据
+// 封装请求数据的Hook
+const useGetList = () => {
+
     const [commentList, setCommentList] = useState([])
 
     useEffect(() => {
@@ -51,10 +49,57 @@ const App = () => {
             const res = await axios.get('http://localhost:3004/list')
             setCommentList(res.data)
         }
-
         getList().then()
-
     }, []);
+
+    return {
+        commentList,
+        setCommentList
+    }
+}
+
+// 封装一个Item组件
+const Item = ({item, onDel}) => {
+
+    return (
+        <div key={item.rpid} className="reply-item">
+            {/* 头像 */}
+            <div className="root-reply-avatar">
+                <div className="bili-avatar">
+                    <img
+                        className="bili-avatar-img"
+                        alt=""
+                        src={item.user.avatar}
+                    />
+                </div>
+            </div>
+
+            <div className="content-wrap">
+                {/* 用户名 */}
+                <div className="user-info">
+                    <div className="user-name">{item.user.uname}</div>
+                </div>
+                {/* 评论内容 */}
+                <div className="root-reply">
+                    <span className="reply-content">{item.content}</span>
+                    <div className="reply-info">
+                        {/* 评论时间 */}
+                        <span className="reply-time">{item.ctime}</span>
+                        {/* 评论数量 */}
+                        <span className="reply-time">点赞数:{item.like}</span>
+                        {user.uid === item.user.uid &&
+                            <span className="delete-btn" onClick={() => onDel(item.rpid)}>删除</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+const App = () => {
+
+    const {commentList, setCommentList} = useGetList()
 
     const [type, setType] = useState(tabs)
 
@@ -153,40 +198,7 @@ const App = () => {
                     {/* 评论项 */}
                     {
                         commentList.map(item => (
-                            <div key={item.rpid} className="reply-item">
-                                {/* 头像 */}
-                                <div className="root-reply-avatar">
-                                    <div className="bili-avatar">
-                                        <img
-                                            className="bili-avatar-img"
-                                            alt=""
-                                            src={item.user.avatar}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="content-wrap">
-                                    {/* 用户名 */}
-                                    <div className="user-info">
-                                        <div className="user-name">{item.user.uname}</div>
-                                    </div>
-                                    {/* 评论内容 */}
-                                    <div className="root-reply">
-                                        <span className="reply-content">{item.content}</span>
-                                        <div className="reply-info">
-                                            {/* 评论时间 */}
-                                            <span className="reply-time">{item.ctime}</span>
-                                            {/* 评论数量 */}
-                                            <span className="reply-time">点赞数:{item.like}</span>
-                                            {user.uid === item.user.uid &&
-                                                <span className="delete-btn" onClick={() => handleDel(item.rpid)}>
-                                                删除
-                                            </span>
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <Item key={item.id} item={item} onDel={(id) => handleDel(id)}/>
                         ))
                     }
                 </div>
