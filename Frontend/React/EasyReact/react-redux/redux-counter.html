@@ -1,0 +1,52 @@
+<button id="decrement">-</button>
+<span id="coutn">0</span>
+<button id="increment">+</button>
+
+<script src="https://unpkg.com/redux@latest/dist/redux.min.js"></script>
+
+<script>
+    // 1. 定义reducer函数
+    // 作用：根据不同的action对象，返回不同的新state
+    // state：管理数据的初始状态
+    // action：对象 type 标记当前想要什么样的修改
+    const reducer = (state = { count: 0 }, action) => {
+        // 数据不可变：基于原始状态生成一个新的状态
+        if (action.type === 'INCREMENT') {
+            return { count: state.count + 1 }
+        } else if (action.type === 'DECREMENT') {
+            return { count: state.count - 1}
+        }
+    }
+    // 2. 使用reducer函数生成store实例
+    const store = Redux.createStore(reducer)
+
+    // 3. 通过store实例的subscribe订阅数据变化
+    // 回调函数在每次state发生变化时自动执行
+    store.subscribe(() => {
+        console.log('数据变化了')
+    })
+
+    // 4. 通过store实例的dispatch函数提交action更改状态
+    const inBtn = document.getElementById('increment')
+    inBtn.addEventListener('click', () => {
+        // 增
+        store.dispatch({
+            type: 'INCREMENT'
+        })
+    })
+    
+    const deBtn = document.getElementById('decrement')
+    inBtn.addEventListener('click', () => {
+        // 减
+        store.dispatch({
+            type: 'DECREMENT'
+        })
+    })
+
+    // 5. 通过store实例getState方法获取最新状态更新到视图中
+    
+
+
+
+
+</script>

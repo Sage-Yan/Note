@@ -880,5 +880,90 @@ export default App;
 
 ## 15. Redux
 
+### 15.1 基本介绍
+
 > Redux是React中最常用的**集中状态管理工具**，类似于Vue中的Pinia，**可以独立于框架运行**。
+
+1. **使用步骤**
+   - 定义一个**`reducer`函数**（根据当前想要做返回的一个新状态）
+   - 使用createStore方法传入reducer函数生成一个**store实例对象**。
+   - 使用store实例的**`subscribe`方法**订阅数据的变化（数据一旦变化，就可以得到通知）
+   - 使用store实例的**`dispatch`方法**提交**`action`对象**触发数据变化（告诉reducer你想怎么改数据）
+   - 使用store实例的**`getState`方法**获取最新的状态数据更新到视图中。
+
+### 15.2 React中使用
+
+1. **安装插件**
+
+<img src="images/image-20251113203215091.png" alt="image-20251113203215091" style="zoom: 33%;" />
+
+```cmd
+npm i @reduxjs/toolkit react-redux
+```
+
+2. **实现`counter`计数器**
+
+```cmd
+# 目录格式
+|-src
+|___store
+|______moudles
+|__________ ....js
+|__________ counterStore.js
+|______index.js	
+|___index.js
+```
+
+- 编写`counterStore.js`
+
+```jsx
+import {createSlice} from "@reduxjs/toolkit"
+
+const counterStore = createSlice({
+    name: 'counter',
+    // 初始化state
+    initialState: {
+        count: 0
+    },
+    // 编写修改数据的方法
+    reducers: {
+        increment: (state) => {
+            state.value++
+        },
+        decrement: (state) => {
+            state.value--
+        }
+    }
+})
+
+// 结构出来actionCreator函数
+const {increment, decrement} = counterStore.actions
+// 获取reducer
+const reducer = counterStore.reducer
+
+// 以按需导出方式导出actionCreator
+export {increment, decrement}
+// 以默认导出的方式导出reducer
+export default reducer
+```
+
+- 编写`index.js`
+
+```jsx
+import {configureStore} from "@reduxjs/toolkit"
+// 导入子模块reducer
+import counterReducer from './moudles/counterStore'
+
+const store = configureStore({
+    reducer:{
+        counter:counterReducer
+    }
+})
+
+export default store
+```
+
+- 
+
+
 
