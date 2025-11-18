@@ -1299,17 +1299,205 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
 #### 6.3.2 实现优惠卷秒杀下单
 
- 
+1. 实现流程
+
+<img src="images/image-20251117193351208.png" alt="image-20251117193351208" style="zoom:50%;" />
+
+2. 代码实现
+
+```java
+@Service
+@RequiredArgsConstructor
+public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
+
+    private final ISeckillVoucherService iSeckillVoucherService;
+
+    private final RedisIdWorker redisIdWorker;
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public Result seckillVoucher(Long voucherId) {
+        // 1. 查询优惠卷
+        SeckillVoucher seckillVoucher = iSeckillVoucherService.getById(voucherId);
+        // 2. 判断是否开始
+        if (seckillVoucher.getBeginTime().isAfter(LocalDateTime.now())) {
+            return Result.fail("秒杀尚未开始");
+        }
+        // 3. 判断是否已经结束
+        if (seckillVoucher.getEndTime().isBefore(LocalDateTime.now())) {
+            return Result.fail("秒杀已结束");
+        }
+        // 4. 判断库存是否充足
+        if (seckillVoucher.getStock() < 1) {
+            return Result.fail("库存不足");
+        }
+        // 5. 扣减库存
+        boolean success = iSeckillVoucherService.update().setSql("stock = stock - 1").eq("voucher_id", voucherId).update();
+        if (!success) {
+            return Result.fail("库存不足");
+        }
+        // 6. 创建订单
+        VoucherOrder voucherOrder = new VoucherOrder();
+        long orderId = redisIdWorker.nextId("order");
+        voucherOrder.setId(orderId);
+        voucherOrder.setUserId(UserHolder.getUser().getId());
+        voucherOrder.setVoucherId(voucherId);
+        save(voucherOrder);
+        // 7. 返回orderId
+        return Result.ok(orderId);
+    }
+}
+```
 
 #### 6.3.3 超卖问题
 
+> 经过Jmeter压测出现了超卖情况。**（多线程并发安全问题）**
 
+1. 问题原理
+
+<img src="images/image-20251117200457031.png" alt="image-20251117200457031" style="zoom:50%;" />
+
+2. 解决方案（加锁）
+   - **悲观锁：**认为线程安全问题一定会发生，因此在操作数据之前先获取锁，确保线程串行。
+     - 例如Synchronized、Lock等
+     - 性能太差
+   - **乐观锁：**认为线程安全问题不一定会发生，因此不加锁，只是在更新数据时去判断有没有其他线程对数据做了修改。
+     - 如果没有修改则认为是安全的，自己才更新数据。
+     - 如果已经被其他线程修改说明发送了安全问题，此时可以重试或异常。
+     - 所以性能要好很多。
+
+3. 乐观锁方案
+
+   - 版本号法：判断数据库版本号字段有没有变化。
+
+   <img src="images/image-20251117201330362.png" alt="image-20251117201330362" style="zoom: 33%;" />
+
+   - CAS方案：用数据本身有没有变化去判断。**(Compare And Set)**
+
+   <img src="images/image-20251117201818366.png" alt="image-20251117201818366" style="zoom:33%;" />
+
+```java
+// 5. 扣减库存
+boolean success = iSeckillVoucherService.update()
+        .setSql("stock = stock - 1")
+        .eq("voucher_id", voucherId)
+        .eq("stock", seckillVoucher.getStock())
+        .update();
+```
+
+4. 优化问题**（完美解决）**
+   - 成功率太低，虽然业务层面不影响。
+
+```java
+// 5. 扣减库存
+boolean success = iSeckillVoucherService.update()
+        .setSql("stock = stock - 1")
+        .eq("voucher_id", voucherId)
+        .gt("stock", 0) // 直接 > 0 就行
+        .update();
+```
 
 #### 6.3.4 一人一单
 
+1. 解决了一人一旦并发安全问题
 
+```java
+@Service
+@RequiredArgsConstructor
+public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
+
+    private final ISeckillVoucherService iSeckillVoucherService;
+
+    private final RedisIdWorker redisIdWorker;
+
+    @Override
+    public Result seckillVoucher(Long voucherId) {
+        // 1. 查询优惠卷
+        SeckillVoucher seckillVoucher = iSeckillVoucherService.getById(voucherId);
+        // 2. 判断是否开始
+        if (seckillVoucher.getBeginTime().isAfter(LocalDateTime.now())) {
+            return Result.fail("秒杀尚未开始");
+        }
+        // 3. 判断是否已经结束
+        if (seckillVoucher.getEndTime().isBefore(LocalDateTime.now())) {
+            return Result.fail("秒杀已结束");
+        }
+        // 4. 判断库存是否充足
+        if (seckillVoucher.getStock() < 1) {
+            return Result.fail("库存不足");
+        }
+
+        Long userId = UserHolder.getUser().getId();
+        // 注意String对象地址不一样所以要用intern从字符串常量池找相同值的对象地址来加锁
+        synchronized (userId.toString().intern()) {
+            // 自我调用事务失效
+            // 获取代理对象（事务） 避免自我调用事务失效
+            IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
+            return proxy.createVoucherOrder(voucherId);
+        }
+    }
+    
+    @Transactional(rollbackFor = Exception.class)
+    public Result createVoucherOrder(Long voucherId) {
+        // 5. 一人一单
+        Long userId = UserHolder.getUser().getId();
+        // 5.1 查询订单
+        int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
+        // 5.2 判断是否存在
+        if (count > 0) {
+            return Result.fail("用户已经购买过一次！");
+        }
+        // 6. 扣减库存
+        boolean success = iSeckillVoucherService.update()
+                .setSql("stock = stock - 1")
+                .eq("voucher_id", voucherId)
+                .gt("stock", 0)
+                .update();
+        if (!success) {
+            return Result.fail("库存不足");
+        }
+        // 7. 创建订单
+
+        VoucherOrder voucherOrder = new VoucherOrder();
+        long orderId = redisIdWorker.nextId("order");
+        voucherOrder.setId(orderId);
+        voucherOrder.setUserId(UserHolder.getUser().getId());
+        voucherOrder.setVoucherId(voucherId);
+        save(voucherOrder);
+        // 7. 返回orderId
+        return Result.ok(orderId);
+
+    }
+}
+
+```
+
+2. 改进
+
+> 集群模式下存在问题，负载均衡情况下，用户ID一样没锁住。
+
+3. 原理
+   - 由于现在我们部署了多个tomcat，每个tomcat都有一个属于自己的jvm，那么假设在服务器A的tomcat内部，有两个线程，这两个线程由于使用的是同一份代码，那么他们的锁对象是同一个，是可以实现互斥的，但是如果现在是服务器B的tomcat内部，又有两个线程，但是他们的锁对象写的虽然和服务器A一样，但是锁对象却不是同一个，所以线程3和线程4可以实现互斥，但是却无法和线程1和线程2实现互斥，这就是 集群环境下，syn锁失效的原因，在这种情况下，我们就需要使用分布式锁来解决这个问题。
+
+<img src="images/image-20251118125247134.png" alt="image-20251118125247134" style="zoom:50%;" />
+
+4. 解决方式：使用分布式锁详情见下。
 
 #### 6.3.5 分布式锁
+
+> 满足在分布式系统或集群模式下多进程可见并且互斥的锁。
+
+1. 必须特性
+   - 多进程可见、互斥、高可用、高性能、安全性...
+2. 分布式锁的方案
+   - 分布式锁的核心是实现多进程之间的互斥，常见实现方法有三种：
+
+|        |           Mysql            |                      Redis                       |            Zookeeper             |
+| :----: | :------------------------: | :----------------------------------------------: | :------------------------------: |
+|  互斥  | 利用数据库本身的互斥锁机制 | 利用setnx互斥命令（只用数据不存在才可以set成功） | 利用节点的唯一性和有序性实现互斥 |
+| 高可用 |     好（支持主从模式）     |                好（集群 + 主从）                 |            好（集群）            |
+| 高性能 |            一般            |                        好                        |    一般（强一致性，数据同步）    |
+| 安全性 |    断开连接，自动释放锁    | 服务宕机，无法释放锁，利用key过期机制，到期释放  |      临时节点，断开自动释放      |
 
 
 

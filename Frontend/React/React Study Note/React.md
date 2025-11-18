@@ -947,7 +947,7 @@ export {increment, decrement}
 export default reducer
 ```
 
-- 编写`index.js`
+- 编写`/store/index.js`
 
 ```jsx
 import {configureStore} from "@reduxjs/toolkit"
@@ -963,7 +963,216 @@ const store = configureStore({
 export default store
 ```
 
-- 
+- 注入store到`/index.js`
 
+```jsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
 
+import store from './store'
+import { Provider } from "react-redux";
+
+const root = ReactDOM.createRoot(document.getElementById('root'))
+root.render(
+  <React.StrictMode>
+      <Provider store={store}>
+          <App />
+      </Provider>
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+```
+
+- 组件中使用
+
+```jsx
+import {useSelector, useDispatch} from 'react-redux'
+
+// 导入actionCreator
+import {increment, decrement} from './store/moudles/counterStore'
+
+function App() {
+    const {count} = useSelector(state => state.counter)
+    const dispatch = useDispatch()
+    return (
+        <div className="App">
+            <button onClick={() => dispatch(decrement())}>-</button>
+            {count}
+            <button onClick={() => dispatch(increment())}>+</button>
+        </div>
+    );
+}
+
+export default App;
+```
+
+### 15.2 提交action传参
+
+```jsx
+import {createSlice} from "@reduxjs/toolkit"
+
+const counterStore = createSlice({
+    name: 'counter',
+    // 初始化state
+    initialState: {
+        count: 0
+    },
+    // 编写修改数据的方法
+    reducers: {
+        increment: (state) => {
+            state.count++
+        },
+        decrement: (state) => {
+            state.count--
+        }, // action传参
+        addToNum: (state, action) => {
+            state.count = action.payload
+        }
+    }
+})
+
+// 结构出来actionCreator函数
+const {increment, decrement, addToNum} = counterStore.actions
+// 获取reducer
+const reducer = counterStore.reducer
+
+// 以按需导出方式导出actionCreator
+export {increment, decrement, addToNum}
+// 以默认导出的方式导出reducer
+export default reducer
+
+```
+
+- 使用方式
+
+```jsx
+import {useSelector, useDispatch} from 'react-redux'
+
+// 导入actionCreator
+import {increment, decrement, addToNum} from './store/moudles/counterStore'
+
+function App() {
+    const {count} = useSelector(state => state.counter)
+    const dispatch = useDispatch()
+    return (
+        <div className="App">
+            <button onClick={() => dispatch(decrement())}>-</button>
+            {count}
+            <button onClick={() => dispatch(increment())}>+</button>
+            <button onClick={() => dispatch(addToNum(20))}>to 20</button>
+            <button onClick={() => dispatch(addToNum(100))}>to 100</button>
+        </div>
+    );
+}
+
+export default App;
+```
+
+### 15.4 异步状态操作
+
+```jsx
+import {createSlice} from "@reduxjs/toolkit"
+import axios from 'axios'
+
+const channelStore = createSlice({
+    name: 'channel',
+    // 初始化state
+    initialState: {
+        channelList: []
+    },
+    // 编写修改数据的方法
+    reducers: {
+        setChannels: (state, action) => {
+            state.channelList = action.payload
+        }
+    }
+})
+
+// 异步请求部分
+const {setChannels} = channelStore.actions
+
+const fetchChannelList = () => {
+    return async (dispatch) => {
+        const res = await axios.get("http://geek.itheima.net/v1_0/channels")
+        dispatch(setChannels(res.data.data.channels))
+    }
+}
+
+export {fetchChannelList}
+
+const reducer = channelStore.reducer
+
+export default reducer
+```
+
+```jsx
+import {configureStore} from "@reduxjs/toolkit"
+// 导入子模块reducer
+import counterReducer from './moudles/channelStore'
+import channelStore from "./moudles/channelStore";
+
+// 创建store组合子模块
+const store = configureStore({
+    reducer: {
+        counter: counterReducer,
+        channel: channelStore
+    }
+})
+
+export default store
+```
+
+```jsx
+import {useSelector, useDispatch} from 'react-redux'
+
+// 导入actionCreator
+import {increment, decrement, addToNum} from './store/moudles/counterStore'
+import {fetchChannelList} from './store/moudles/channelStore'
+import {useEffect} from "react";
+
+function App() {
+    const {count} = useSelector(state => state.counter)
+    const {channelList} = useSelector(state => state.channel)
+    const dispatch = useDispatch()
+    // 使用useEffect触发异步请求执行
+    useEffect(() => {
+        dispatch(fetchChannelList())
+    })
+    return (
+        <div className="App">
+            <button onClick={() => dispatch(decrement())}>-</button>
+            {count}
+            <button onClick={() => dispatch(increment())}>+</button>
+            <button onClick={() => dispatch(addToNum(20))}>to 20</button>
+            <button onClick={() => dispatch(addToNum(100))}>to 100</button>
+            <ul>
+                {channelList.map(item => <li key={item.id}>{item.name}</li>)}
+            </ul>
+        </div>
+    );
+}
+
+export default App;
+```
+
+### 15.5 devtools使用
+
+......
+
+## 16. ReacrRouter
+
+### 16.1 基本使用
+
+1. 安装依赖
+
+```cmd
+npm i react-router-dom
+```
 
