@@ -1483,7 +1483,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
 4. 解决方式：使用分布式锁详情见下。
 
-#### 6.3.5 分布式锁
+### 6.4 分布式锁
 
 > 满足在分布式系统或集群模式下多进程可见并且互斥的锁。
 
@@ -1590,7 +1590,7 @@ public Result seckillVoucher(Long voucherId) {
 }
 ```
 
-#### 6.3.6 锁误删问题
+#### 6.4.1 锁误删问题
 
 <img src="images/image-20251118200022094.png" alt="image-20251118200022094" style="zoom:50%;" />
 
@@ -1648,7 +1648,7 @@ public class SimpleRedisLock implements ILock {
 }
 ```
 
-#### 6.3.7 原子性问题
+#### 6.4.2 原子性问题
 
 > 可能判断完锁标识的时候JVM内部阻塞了导致**锁超时释放**，从而导致并发问题。归根结底是因为**获取标识**和**释放锁**是两个动作。
 >
@@ -1656,7 +1656,7 @@ public class SimpleRedisLock implements ILock {
 
 <img src="images/image-20251118201836593.png" alt="image-20251118201836593" style="zoom:50%;" />
 
-#### 6.4.8 Lua脚本
+#### 6.4.3 Lua脚本
 
 > 解决原子性问题
 >
@@ -1721,23 +1721,61 @@ public class SimpleRedisLock implements ILock {
 
 ```
 
-#### 6.4.9 Redission
+#### 6.4.4 Redission
 
+> 上方基于setnx实现的分布式存在问题
 
+1. 存在问题
+   - 不可重入：同一个线程无法多次获取一把锁。
+   - 不可重试：获取锁只尝试一次就返回false，没有重试机制。
+   - 超时释放：锁的超时释放虽然可以避免死锁，但如果业务执行耗时较长，也会导致锁释放，存在安全隐患。
+   - 主从一致性：如果Redis提供了主从集群，主从同步存在延迟，当主宕机时，如果从未同步则其他线程可以拿到锁。
 
-### 6.4 分布式锁
+2. 基本介绍
 
+   - Redisson是一个在Redis的基础上实现的Java驻内存数据网络（In_Memory Data Grid）。它不仅提供了一系列的分布式的Java常用对象，还提供了许多分布式服务，其中就包含了各种分布式锁的实现。
 
+3. 基本使用
 
+   - 引入依赖
 
+   ```xml
+   <dependency>
+   	<groupId>org.redisson</groupId>
+   	<artifactId>redisson</artifactId>
+   	<version>3.52.0</version>
+   </dependency>
+   ```
 
-### 6.5 秒杀优化
+   - 配置客户端
 
+   ```java
+   /**
+    * @Classname RedisConfig
+    * @Description Redis相关配置类
+    * @Date 2025/11/19 15:26
+    * @Created by YanShijie
+    */
+   @Configuration
+   public class RedisConfig {
+   
+       @Bean
+       public RedissonClient redissonClient() {
+           // 配置类
+           Config config = new Config();
+           // 添加redis地址 密码
+           config.useSingleServer().setAddress("redis://192.168.147.100:6379").setPassword("Ysj245913@.");
+           // 创建客户端
+           return Redisson.create();
+       }
+   }
+   ```
 
+4. Redisson可重入锁原理
+5. 锁重试和WatchDog机制
+6. multiLock原理
 
-
-
-### 6.6 Redis消息队列
+### 6.5 Redis消息队列
 
 
 
