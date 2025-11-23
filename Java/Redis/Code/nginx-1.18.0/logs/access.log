@@ -16087,3 +16087,5 @@
 127.0.0.1 - - [18/Nov/2025:12:43:54 +0800] "GET /api/voucher/list/1 HTTP/1.1" 200 565 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 127.0.0.1 - - [18/Nov/2025:12:44:56 +0800] "GET /api/voucher/list/1 HTTP/1.1" 200 565 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 127.0.0.1 - - [18/Nov/2025:12:44:57 +0800] "GET /api/voucher/list/1 HTTP/1.1" 200 565 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+127.0.0.1 - - [18/Nov/2025:19:50:10 +0800] "POST /api/voucher-order/seckill/10 HTTP/1.1" 504 494 "-" "Apifox/1.0.0 (https://apifox.com)"
+127.0.0.1 - - [18/Nov/2025:19:50:41 +0800] "POST /api/voucher-order/seckill/10 HTTP/1.1" 504 494 "-" "Apifox/1.0.0 (https://apifox.com)"

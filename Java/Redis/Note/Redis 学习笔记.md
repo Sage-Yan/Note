@@ -1772,8 +1772,23 @@ public class SimpleRedisLock implements ILock {
    ```
 
 4. Redisson可重入锁原理
+
+> 为了解决同一个线程无法多次获取同一把锁。
+
 5. 锁重试和WatchDog机制
+
+> 获取锁只尝试一次就返回false，没有重试机制。
+
+<img src="images/mermaid-diagram.png" alt="mermaid-diagram" style="zoom: 33%;" />
+
+> 锁超时释放虽然可以避免死锁，但如果是业务执行时间较长，也会导致锁释放，存在安全隐患。
+
+<img src="images/image-20251121180802311.png" alt="image-20251121180802311" style="zoom:33%;" />
+
+
 6. multiLock原理
+
+> Redis提供了主从集群，主从同步存在延迟，当主机宕机时，如果从并同步主中的锁数据，则会出现锁实现。
 
 ### 6.5 Redis消息队列
 
