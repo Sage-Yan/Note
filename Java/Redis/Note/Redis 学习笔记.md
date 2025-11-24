@@ -1786,9 +1786,21 @@ public class SimpleRedisLock implements ILock {
 <img src="images/image-20251121180802311.png" alt="image-20251121180802311" style="zoom:33%;" />
 
 
-6. multiLock原理
+6. multiLock原理**（联锁）**
 
-> Redis提供了主从集群，主从同步存在延迟，当主机宕机时，如果从并同步主中的锁数据，则会出现锁实现。
+> Redis提供了主从集群，主从同步存在延迟，当主机宕机时，如果从机还未同步主中的锁数据，则会出现锁失效。**（主从一致性问题）**
+
+<img src="images/image-20251123224047604.png" alt="image-20251123224047604" style="zoom:50%;" />
+
+<img src="images/image-20251123224430497.png" alt="image-20251123224430497" style="zoom:50%;" />
+
+```java
+lock = redissonClient.getMultiLock(lock1, lock2, lock3) // 联锁
+```
+
+#### 6.4.5 优化秒杀
+
+
 
 ### 6.5 Redis消息队列
 
