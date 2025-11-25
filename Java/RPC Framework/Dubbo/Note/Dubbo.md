@@ -70,7 +70,7 @@ public class UserService {
 <!--dubbo 注册中心-->
 <dependency>
     <groupId>org.apache.dubbo</groupId>
-    <artifactId>dubbo-registry-nacos</artifactId>
+    <artifactId>dubbo-registry-zookeeper</artifactId>
 </dependency>
 ```
 
@@ -100,10 +100,7 @@ dubbo:
 ```yml
 dubbo:
   registry:
-    address: nacos://8.130.147.75:8848 # nacos地址
-    parameters:
-      namespace: a64b3045-c171-4423-b633-871e5979933c # nacos命名空间 通过namespace把它隔离开了 防止其他服务访问
-      group: dubbo # nacos分组
+    address: zookeeper://8.130.147.75:8848 # zookeeper地址
 ```
 
 6. 配置所使用的协议。

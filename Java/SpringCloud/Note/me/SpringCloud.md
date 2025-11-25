@@ -397,11 +397,13 @@ public Order seckillFallback(Long userId, Long productId, BlockException e) {
 
 
 
-## 五、 Gateway
+## 5. Gateway
 
 > **官方文档：**https://docs.spring.io/spring-cloud-gateway/reference/
->
-> 网关
+
+### 5.1 疑问
+
+​	
 
 ### 1.  基础
 

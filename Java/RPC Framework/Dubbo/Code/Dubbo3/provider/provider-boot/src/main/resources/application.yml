@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: dubbo-provider
+
+server:
+  port: 8090
+
+dubbo:
+  application:
+    name: ${spring.application.name}
+  protocol:
+    name: dubbo
+    port: 20880 # 默认端口 20880
+  registry:
+    address: zookeeper://192.168.147.100:2181 # zookeeper地址
