@@ -4,6 +4,7 @@ import com.hmdp.utils.LoginInterceptor;
 import com.hmdp.utils.RefreshInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -16,6 +17,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 @Configuration
 @RequiredArgsConstructor
+@EnableAspectJAutoProxy(exposeProxy = true)
 public class MVCConfig implements WebMvcConfigurer {
 
     private final StringRedisTemplate stringRedisTemplate;

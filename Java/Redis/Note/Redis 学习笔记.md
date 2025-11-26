@@ -1800,9 +1800,350 @@ lock = redissonClient.getMultiLock(lock1, lock2, lock3) // 联锁
 
 #### 6.4.5 优化秒杀
 
+> 思路：同步 -> 异步
 
+<img src="images/image-20251126121416883.png" alt="image-20251126121416883" style="zoom:50%;" />
+
+1. 需求 ①
+
+```java
+@Override
+@Transactional
+public void addSeckillVoucher(Voucher voucher) {
+    // 保存优惠券
+    save(voucher);
+    // 保存秒杀信息
+    SeckillVoucher seckillVoucher = new SeckillVoucher();
+    seckillVoucher.setVoucherId(voucher.getId());
+    seckillVoucher.setStock(voucher.getStock());
+    seckillVoucher.setBeginTime(voucher.getBeginTime());
+    seckillVoucher.setEndTime(voucher.getEndTime());
+    seckillVoucherService.save(seckillVoucher);
+    // 优化秒杀：保存秒杀库存到redis
+    stringRedisTemplate.opsForValue().set(SECKILL_STOCK_KEY + voucher.getId(), voucher.getStock().toString());
+}
+```
+
+2. 需求 ②
+
+<img src="images/image-20251126123001498.png" alt="image-20251126123001498" style="zoom:50%;" />
+
+```lua
+--1.参数列表
+--1.1 优惠卷ID
+local voucherId = ARGV[1];
+--1.2 用户ID
+local userId = ARGV[2];
+
+--2.数据key
+--2.1 库存key
+local stockKey = "seckill:stock:" .. voucherId;
+--2.2订单key
+local orderKey = "seckill:order:" .. voucherId;
+
+--3.脚本业务
+--3.1判断库存是否充足
+if tonumber(redis.call('get', stockKey) <= 0) then
+    --3.2库存不足
+    return 1
+end
+--3.3判断用户是否重复下单 SISMEMBER orderKey userId
+if (redis.call('sismember', orderKey, userId) == 1) then
+    --3.4存在说明用户重复下单
+    return 2
+end
+-- 3.5扣减库存 incrby stockKey -1
+redis.call('incrby', stockKey, -1);
+-- 3.6用户下单(保存用户) sadd orderKey userId
+redis.call('sadd', orderKey, userId);
+return 0;
+```
+
+3. 需求 ③ ④
+
+```java
+@Service
+@RequiredArgsConstructor
+public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, VoucherOrder> implements IVoucherOrderService {
+
+    private final ISeckillVoucherService iSeckillVoucherService;
+
+    private final RedisIdWorker redisIdWorker;
+
+    private final RedissonClient redissonClient;
+
+    private final StringRedisTemplate stringRedisTemplate;
+
+    // 读取lua脚本
+    private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
+
+    static {
+        SECKILL_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_SCRIPT.setLocation(new ClassPathResource("seckill.lua"));
+        SECKILL_SCRIPT.setResultType(Long.class);
+    }
+
+    // 没有元素时，阻塞，直到有元素才唤醒
+    private BlockingQueue<VoucherOrder> orderTasks = new ArrayBlockingQueue<>(1024 * 1024);
+    // 创建线程池
+    private ExecutorService SECKILL_ORDER_EXECUTOR = Executors.newSingleThreadExecutor();
+    // 当前类初始化完毕就要执行
+    @PostConstruct
+    private void init() {
+        SECKILL_ORDER_EXECUTOR.submit(new VoucherOrderHandler());
+    }
+    // 线程任务
+    private class VoucherOrderHandler implements Runnable {
+        @Override
+        public void run() {
+            // 获取队列中的头部
+            while (true) {
+                try {
+                    // 1. 获取队列中的订单信息
+                    VoucherOrder voucherOrder = orderTasks.take();
+                    // 2. 创建订单信息
+                    handleVoucherOrder(voucherOrder);
+                } catch (Exception e) {
+                    log.error("处理订单异常", e);
+                }
+            }
+        }
+    }
+
+    private IVoucherOrderService proxy;
+
+    private void handleVoucherOrder(VoucherOrder voucherOrder) {
+        // 1. 获取用户
+        Long userId = voucherOrder.getUserId();
+        // 2. 创建锁对象
+        RLock lock = redissonClient.getLock("lock:order:" + userId);
+        // 3. 获取锁
+        boolean isLock = lock.tryLock();
+        // 4. 判断是否获取锁成功
+        if (!isLock) {
+            log.error("不允许重复下单");
+        }
+        try {
+            // 获取代理对象 由于现在是子线程不是子线程所以不能直接获取
+            proxy.createVoucherOrder(voucherOrder);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public Result seckillVoucher(Long voucherId) {
+        // 获取用户id
+        Long userId = UserHolder.getUser().getId();
+        // 1. 执行lua脚本
+        Long result = stringRedisTemplate.execute(
+                SECKILL_SCRIPT,
+                Collections.emptyList(),
+                voucherId.toString(), userId.toString()
+        );
+        // 2. 判断结果是否为0
+        // 2.1 不为0 代表没有购买资格
+        if (result != 0) {
+            return Result.fail(result == 1 ? "库存不足" : "不能重复下单");
+        }
+        // 2.2 为0 有购买资格，把下单信息保存到阻塞队列
+        VoucherOrder voucherOrder = new VoucherOrder();
+        // 2.3 订单id
+        long orderId = redisIdWorker.nextId("order");
+        voucherOrder.setId(orderId);
+        // 2.4 用户id
+        voucherOrder.setUserId(UserHolder.getUser().getId());
+        // 2.5 优惠卷id
+        voucherOrder.setVoucherId(voucherId);
+        // 2.6 放入阻塞队列
+        orderTasks.add(voucherOrder);
+        // 3. 获取代理对象
+        proxy = (IVoucherOrderService) Proxy.newProxyInstance(
+                IVoucherOrderService.class.getClassLoader(),
+                new Class[]{IVoucherOrderService.class},
+                (proxyObj, method, args) -> method.invoke(this, args)
+        );
+
+        return Result.ok(orderId);
+
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void createVoucherOrder(VoucherOrder voucherOrder) {
+        // 5. 一人一单
+        Long userId = voucherOrder.getUserId();
+        // 5.1 查询订单
+        int count = query().eq("user_id", userId).eq("voucher_id", voucherOrder.getVoucherId()).count();
+        // 5.2 判断是否存在
+        if (count > 0) {
+            log.error("用户已经购买过一次！");
+        }
+        // 6. 扣减库存
+        boolean success = iSeckillVoucherService.update()
+                .setSql("stock = stock - 1")
+                .eq("voucher_id", voucherOrder.getVoucherId())
+                .gt("stock", 0)
+                .update();
+        if (!success) {
+            log.error("库存不足");
+        }
+        // 7. 创建订单
+        save(voucherOrder);
+    }
+}
+```
+
+4. 基于阻塞队列的米秒杀存在问题。
+   - **内存限制问题：**阻塞队列使用的是JVM内存可能会内存溢出
+   - **数据安全问题：**数据一致性问题，发生事故导致未同步mysql
+5. 解决方式
+   - 使用redis消息队列解决以上问题。
+
+---
 
 ### 6.5 Redis消息队列
+
+#### 6.5.1 认识消息队列
+
+> Message Queue，就是存放消息的队列。
+
+1. 消息队列：存储和管理消息，也称为代理消息。
+2. 生产者：发送消息到消息队列。
+3. 消费者：从消息队列获取消息并处理消息。
+
+<img src="images/image-20251126194320530.png" alt="image-20251126194320530" style="zoom: 50%;" />
+
+4. 优势：
+   - 不受JVM内存限制，解决内存限制问题。
+   - 持久化、消息确认机制，解决了数据安全问题。
+
+5. Redis实现消息队列
+   - List结构：基于List的结构模拟消息队列。
+   - PubSub：基本的点对点消息模型。
+   - Stream：比较完善的消息队列模型。
+
+#### 6.5.2 基于List的结构模拟消息队列
+
+> Redis的List数据结构是一个双向链表，很容易模拟出队列效果。利用`LPUSH`结合`ROPO`或`RPUSH`结果`LPOP`实现。不过要注意的是，当队列中没有数据前面命令会返回`null`并不想JVM的阻塞队列那样会阻塞并等待消息。**因此这里应该使用`BRPOP`或者`BLPOP`来实现阻塞效果。**
+
+1. 优点
+   - 不受限于JVM内存上限
+   - 持久化机制，保证数据安全
+   - 满足消息的有序性
+2. 缺点
+   - 无法避免消息丢失
+   - 只支持单消费者
+
+#### 6.5.3 基于PubSub的消息队列（单消费模式）
+
+> Redis2.0引入的消息传递模型。消费者可以订阅一个或多个channel，生产者向对应的channel发送消息，所有的订阅者都能收到消息。
+
+1. 常用命令
+   - SUBSCRIBE channel [channel...]：订阅一个或多个频道。
+   - PUBLISH channel msg：向一个频道发送消息。
+   - PSUBSCRIBE pattern [pattern]：订阅与通配符符合的所有频道。
+2. 优点
+   - 采用发布订阅模型，支持多生产，多消费。
+3. 缺点
+   - 不支持数据持久化
+   - 无法避免数据丢失
+   - 消息堆积有上限，超出时数据丢失
+
+#### 6.5.4 基于Stream的消息队列
+
+> Redis 5.0 引入的新的数据类型，可以实现一个功能非常完善的消息队列。
+
+1. 单消费模式
+
+<img src="images/image-20251126200433361.png" alt="image-20251126200433361" style="zoom:50%;" />
+
+<img src="images/image-20251126200531368.png" alt="image-20251126200531368" style="zoom:50%;" />
+
+<img src="images/image-20251126200627075.png" alt="image-20251126200627075" style="zoom:50%;" />
+
+<img src="images/image-20251126200713855.png" alt="image-20251126200713855" style="zoom:50%;" />
+
+2. XREAD特点
+   - 消息可回溯
+   - 一个消息可以被多个消费者读取
+   - 可以阻塞读取
+   - 有消息漏读的风险
+
+#### 6.5.4 基于PubSub的消息队列（消费者组）
+
+> 将多个消费者划分到一个组中，监听同一个队列。
+
+1. 特点
+   - 消息分流：消息分流到组内不同消费者，而不是重复消费，从而加快消息处理的速度。
+   - 消息标示：消费者组会维护一个标示，记录最后一个被处理的消息，哪怕消费者宕机重启，还会从标示之后读取消息，确保每一个消息都被消费
+   - 消息确认：消费者获取消息后，消息处于pending状态，并存入一个pending-list。当处理完成后需要通过XACK确认消息，标记消息为已处理，才会从pending-list移除。
+2. 基本命令
+
+<img src="images/image-20251126201529763.png" alt="image-20251126201529763" style="zoom:50%;" />
+
+<img src="images/image-20251126201627844.png" alt="image-20251126201627844" style="zoom:50%;" />
+
+3. 基本思路
+
+<img src="images/image-20251126201753710.png" alt="image-20251126201753710" style="zoom:50%;" />
+
+#### 6.5.6 Stream优化秒杀
+
+1. 需求
+
+<img src="images/image-20251126201952056.png" alt="image-20251126201952056" style="zoom:50%;" />
+
+2. 需求 ①
+
+```redis
+XGROUP CREATE stream.orders g1 0 MKSTREAM
+```
+
+3. 需求 ②
+
+```lua
+--1.参数列表
+--1.1 优惠卷ID
+local voucherId = ARGV[1];
+--1.2 用户ID
+local userId = ARGV[2];
+--1.3 订单ID
+local orderId = ARGV[3];
+
+
+--2.数据key
+--2.1 库存key
+local stockKey = "seckill:stock:" .. voucherId;
+--2.2订单key
+local orderKey = "seckill:order:" .. voucherId;
+
+--3.脚本业务
+--3.1判断库存是否充足
+if tonumber(redis.call('get', stockKey)) <= 0 then
+    --3.2库存不足
+    return 1
+end
+--3.3判断用户是否重复下单 SISMEMBER orderKey userId
+if (redis.call('sismember', orderKey, userId) == 1) then
+    --3.4存在说明用户重复下单
+    return 2
+end
+-- 3.5扣减库存 incrby stockKey -1
+redis.call('incrby', stockKey, -1);
+-- 3.6用户下单(保存用户) sadd orderKey userId
+redis.call('sadd', orderKey, userId);
+-- 3.7发送消息到队列中 XADD stream.orders(队列名称) * (自动生成) k1 v1 k2 v2 ...
+redis.call('xadd', 'stream.orders', '*', 'userId', userId, 'voucherId', voucherId, 'id', orderId)
+return 0;
+```
+
+4. 需求 ③
+
+```java
+
+```
+
+
 
 
 
