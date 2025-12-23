@@ -21,16 +21,16 @@ CREATE TABLE tb_user
 show index from tb_user;
 
 # 为name字段创建普通索引
-create index idx_user_name on tb_user(name);
+create index idx_user_name on tb_user (name);
 
 # 为phone字段创建唯一索引
-create unique index idx_user_phone on tb_user(phone);
+create unique index idx_user_phone on tb_user (phone);
 
 # 为profession ,age, status 创建联合索引
-create index idx_user_pro_age_sta on tb_user(profession, age, status);
+create index idx_user_pro_age_sta on tb_user (profession, age, status);
 
 # 为email创建索引提升查询效率
-create index idx_user_email on tb_user(email);
+create index idx_user_email on tb_user (email);
 
 # 删除索引
 drop index idx_user_email on tb_user;
@@ -75,5 +75,43 @@ show profiles;
 
 # 查看 profile（指令耗时情况）
 show profiles;
+
+# explain执行计划
+explain
+select *
+from tb_user
+where id = 1;
+
+# 测试数据
+# 学生表
+create table tb_student
+(
+    id     BIGINT PRIMARY KEY AUTO_INCREMENT NOT NULL,
+    name   VARCHAR(64),
+    age    INT,
+    gender INT
+) COMMENT '学生表';
+# 课程表
+create table tb_course
+(
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT NOT NULL,
+    name        VARCHAR(64),
+    description VARCHAR(128)
+) COMMENT '课程表';
+# 学生课程表
+create table tb_student_course
+(
+    id         BIGINT PRIMARY KEY AUTO_INCREMENT NOT NULL,
+    student_id BIGINT,
+    course_id  BIGINT
+) COMMENT '学生课程表';
+
+explain select
+    tb_user.id,
+    tb_user.name,
+    tb_course.name as course_name
+from tb_user
+left join tb_student_course on tb_user.id = tb_student_course.student_id
+left join tb_course on tb_student_course.course_id = tb_course.id
 # endregion SQL 性能分析
 

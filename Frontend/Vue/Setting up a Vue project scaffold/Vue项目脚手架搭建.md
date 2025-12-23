@@ -226,7 +226,7 @@ export default defineConfig({
 })
 ```
 
-2. 配置`tsconfig.json`
+2. 配置`tsconfig.json，tsconfig.app.json,tsconfig.node.json`
 
 > 为了让编辑器（和编译器）也识别别名，你还需要在 tsconfig.json 里同步配置：
 
@@ -242,6 +242,17 @@ export default defineConfig({
     }
   }
 }	
+```
+
+3. 创建`shims-vue.d.ts`文件
+
+```ts
+// 创建shims-vue.d.ts文件（若出现别名引入找不到问题）
+declare module '*.vue' {
+  import { DefineComponent } from 'vue'
+  const component: DefineComponent<{}, {}, any>
+  export default component
+}
 ```
 
 ## 四、环境变量 配置
@@ -391,6 +402,6 @@ import router from './router';
 
 const app = createApp(App)
 app.use(router)
-ap	p.mount('#app')
+app.mount('#app')
 ```
 

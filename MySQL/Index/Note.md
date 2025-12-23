@@ -254,3 +254,27 @@ show profiles;
 show profile cpu for query 221;
 ```
 
+### 5.4 explain执行计划
+
+> EXPLAIN或者DESC命令获取MySQL如何执行SELECT语句的信息，包括在SELECT语句执行过程中表如何连接和连接的顺序
+
+```sql
+explain select * from tb_user where id = 1;
+```
+
+![image-20251215155045491](images/image-20251215155045491.png)
+
+1. 各字段含义
+   - id：select查询的序列号，表示查询中执行select子句或者是操作表的顺序（id相同，执行顺序从上到下；不同，值越大越靠前）
+
+```sql
+explain select
+    tb_user.id,
+    tb_user.name,
+    tb_course.name as course_name
+from tb_user
+left join tb_student_course on tb_user.id = tb_student_course.student_id
+left join tb_course on tb_student_course.course_id = tb_course.id
+```
+
+![image-20251215162324925](images/image-20251215162324925.png)
